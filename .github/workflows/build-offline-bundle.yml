@@ -1,26 +1,28 @@
-name: Build Offline Bundle and Create Release
+name: Build Woosh Offline Bundle & Create Release
 
 on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag (e.g., v1.0.0)'
-        required: true
-        default: 'v1.0.0'
+        description: 'Release tag (e.g., v1.0.0, or auto by date)'
+        required: false
+        default: ''
       release_title:
         description: 'Release title'
-        required: true
+        required: false
         default: 'Woosh Offline Bundle'
 
-jobs:
-  build-bundle:
-    runs-on: windows-latest
+permissions:
+  contents: write    # Required to create releases and upload assets
 
+jobs:
+  build:
+    runs-on: windows-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -28,10 +30,10 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Install dependencies
+      - name: Install dependencies (CUDA)
         run: uv sync --extra cuda
 
-      - name: Download model weights
+      - name: Download model weights from official release
         run: |
           gh release download v1.0.0 --repo SonyResearch/woosh-sfx --pattern '*.zip' --dir checkpoints/
           powershell -Command "Get-ChildItem -Path checkpoints -Filter *.zip | ForEach-Object { Expand-Archive -Path $_.FullName -DestinationPath checkpoints -Force }"
@@ -39,29 +41,48 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Create archive using 7-Zip
-        run: 7z a -tzip Woosh_Offline_Bundle.zip * -r -mx5
+      - name: Create archive with 7-Zip (supports large files)
+        run: 7z a -tzip Woosh_Offline_Bundle.zip * -r -mx9
 
-      - name: Create GitHub Release
-        id: create_release
+      - name: Set automatic tag if not provided
+        id: vars
+        run: |
+          if ("${{ github.event.inputs.tag_name }}" -eq "") {
+            $tag = "offline-bundle-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+            echo "TAG_NAME=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            echo "RELEASE_TITLE=Woosh Offline Bundle ($tag)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            echo "TAG_NAME=${{ github.event.inputs.tag_name }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            echo "RELEASE_TITLE=${{ github.event.inputs.release_title }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+        shell: pwsh
+
+      - name: Create GitHub Release and upload asset
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.inputs.tag_name }}
-          name: ${{ github.event.inputs.release_title }}
+          tag_name: ${{ steps.vars.outputs.TAG_NAME }}
+          name: ${{ steps.vars.outputs.RELEASE_TITLE }}
           body: |
-            ## Woosh Offline Bundle
-            This bundle includes:
-            - All Python dependencies (virtual environment)
-            - All model checkpoints
+            ## 🎧 Woosh AI Sound Effect Generator – Offline Bundle
+
+            This bundle contains everything except a global Python installation.
+
+            ### 📦 What's inside
             - Full source code
-            
-            ### How to use:
-            1. Extract the zip anywhere on your PC
-            2. Make sure Python 3.12 is installed globally
-            3. Run: `.venv\Scripts\python gradio_Woosh-Flow.py`
-            4. Open http://127.0.0.1:7860 in your browser
+            - Virtual environment with all dependencies (PyTorch CUDA, gradio, etc.)
+            - All AI model checkpoints (downloaded from official release)
+
+            ### 🚀 How to use (Windows)
+            1. Extract the ZIP anywhere
+            2. Install **Python 3.12** from [python.org](https://python.org) (make sure to check "Add to PATH")
+            3. Open a terminal inside the extracted folder
+            4. Run: `.venv\Scripts\python gradio_Woosh-Flow.py`
+            5. Open your browser to `http://127.0.0.1:7860`
+
+            ### 📥 Download via mirror
+            If GitHub is blocked, try your mirror by replacing `https://github.com` with `http://liara.ir/mirrors/github` in the download URL.
+
+            Build date: ${{ github.run_attempt }} / ${{ github.run_number }}
           draft: false
           prerelease: false
           files: Woosh_Offline_Bundle.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
