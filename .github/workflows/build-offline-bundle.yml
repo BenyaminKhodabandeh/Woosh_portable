@@ -41,8 +41,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Create archive with 7-Zip (supports large files)
-        run: 7z a -tzip Woosh_Offline_Bundle.zip * -r -mx9
+      - name: Create multi‑volume archive (split into <2 GB parts)
+        run: |
+          7z a -v1900m -mx5 -t7z Woosh_Offline_Bundle.7z * -r
+        shell: pwsh
 
       - name: Set automatic tag if not provided
         id: vars
@@ -57,32 +59,34 @@ jobs:
           }
         shell: pwsh
 
-      - name: Create GitHub Release and upload asset
+      - name: Create GitHub Release and upload all archive parts
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.vars.outputs.TAG_NAME }}
           name: ${{ steps.vars.outputs.RELEASE_TITLE }}
           body: |
-            ## 🎧 Woosh AI Sound Effect Generator – Offline Bundle
+            ## 🎧 Woosh AI Sound Effect Generator – Offline Bundle (split archive)
 
-            This bundle contains everything except a global Python installation.
-
+            **Because the full bundle exceeds GitHub's 2 GB file limit, it is split into multiple volumes.**
+            
             ### 📦 What's inside
             - Full source code
             - Virtual environment with all dependencies (PyTorch CUDA, gradio, etc.)
-            - All AI model checkpoints (downloaded from official release)
-
-            ### 🚀 How to use (Windows)
-            1. Extract the ZIP anywhere
-            2. Install **Python 3.12** from [python.org](https://python.org) (make sure to check "Add to PATH")
-            3. Open a terminal inside the extracted folder
-            4. Run: `.venv\Scripts\python gradio_Woosh-Flow.py`
-            5. Open your browser to `http://127.0.0.1:7860`
-
+            - All AI model checkpoints
+            
+            ### 🔧 How to reassemble and run (Windows)
+            1. **Download all** parts: `Woosh_Offline_Bundle.7z.001`, `.002`, `.003`, … from this release.
+            2. **Install [7‑Zip](https://www.7-zip.org/)** if you don't have it.
+            3. Place all parts in the **same empty folder**.
+            4. Right‑click `Woosh_Offline_Bundle.7z.001` → **7‑Zip** → **Extract Here**.
+            5. Inside the extracted folder, open a terminal and run:  
+               `.venv\Scripts\python gradio_Woosh-Flow.py`
+            6. Open your browser to `http://127.0.0.1:7860`
+            
             ### 📥 Download via mirror
-            If GitHub is blocked, try your mirror by replacing `https://github.com` with `http://liara.ir/mirrors/github` in the download URL.
-
-            Build date: ${{ github.run_attempt }} / ${{ github.run_number }}
+            Replace `https://github.com` with `http://liara.ir/mirrors/github` in the download URL of **each part**.
+            
+            Build: ${{ github.run_attempt }} / ${{ github.run_number }}
           draft: false
           prerelease: false
-          files: Woosh_Offline_Bundle.zip
+          files: Woosh_Offline_Bundle.7z.*   # Uploads all split volumes
