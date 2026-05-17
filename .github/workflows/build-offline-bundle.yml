@@ -1,0 +1,54 @@
+name: Build Offline Bundle
+
+# This triggers the workflow when you manually start it from the Actions tab.
+on:
+  workflow_dispatch:
+
+jobs:
+  build-bundle:
+    # Runs on the latest Windows runner provided by GitHub.
+    runs-on: windows-latest
+
+    steps:
+      # Step 1: Checkout your repository's code.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up the correct Python version.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Step 3: Install 'uv' for fast, reliable dependency management.
+      - name: Install uv
+        run: pip install uv
+
+      # Step 4: Install the Woosh dependencies inside the virtual environment.
+      # The '--extra cuda' ensures the correct GPU-enabled PyTorch is installed.
+      - name: Install dependencies
+        run: uv sync --extra cuda
+
+      # Step 5: Download the model weights from the releases page.
+      # The 'gh' CLI is pre-installed on GitHub runners.
+      - name: Download model weights
+        run: |
+          gh release download v1.0.0 --repo SonyResearch/woosh-sfx --pattern '*.zip' --dir checkpoints/
+          # Unzip the downloaded files into a single 'checkpoints' folder.
+          powershell -Command "Get-ChildItem -Path checkpoints -Filter *.zip | ForEach-Object { Expand-Archive -Path $_.FullName -DestinationPath checkpoints -Force }"
+          # Clean up the zip files after extraction.
+          Remove-Item checkpoints\*.zip
+        env:
+          GH_TOKEN: ${{ github.token }} # Uses your GitHub token for authentication.
+
+      # Step 6: Package everything into a single archive.
+      # This includes the source code, the virtual environment, and the models.
+      - name: Create archive
+        run: powershell Compress-Archive -Path * -DestinationPath Woosh_Offline_Bundle.zip -Force
+
+      # Step 7: Save the archive as a downloadable artifact.
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Woosh-Offline-Bundle
+          path: Woosh_Offline_Bundle.zip
