@@ -43,7 +43,7 @@ jobs:
 
       - name: Create multi‑volume archive (split into <2 GB parts)
         run: |
-          7z a -v1900m -mx5 -t7z Woosh_Offline_Bundle.7z * -r
+          7z a -v1900m -mx9 -t7z Woosh_Offline_Bundle.7z * -r
         shell: pwsh
 
       - name: Set automatic tag if not provided
